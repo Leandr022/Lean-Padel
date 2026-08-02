@@ -43,6 +43,16 @@ export default function ProveedorAutenticacion({ children }) {
   async function iniciarSesion(email, password, rolEsperado) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error || !data.user) {
+      // Supabase distingue el motivo real en error.message. Antes acá se
+      // mostraba siempre "Email o contraseña incorrectos" sin importar la
+      // causa, lo que tapaba el caso más común al recién crear usuarios: que
+      // el email todavía no está confirmado.
+      if (error?.message?.toLowerCase().includes("email not confirmed")) {
+        return {
+          ok: false,
+          mensaje: "Todavía no confirmaste el email de esta cuenta. Revisá la casilla de correo (y spam) y tocá el link de confirmación, o pedile a un admin que la confirme manualmente desde Supabase.",
+        };
+      }
       return { ok: false, mensaje: "Email o contraseña incorrectos." };
     }
     let perfil;
