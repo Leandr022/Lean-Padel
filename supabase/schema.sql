@@ -1,0 +1,552 @@
+-- =========================================================
+-- LS Padel Coach — esquema de base de datos (Supabase/Postgres)
+-- Ejecutar completo en: Supabase → SQL Editor → New query → Run
+-- Es seguro volver a ejecutarlo (usa "if not exists" / "on conflict")
+-- =========================================================
+
+create extension if not exists pgcrypto;
+
+-- ---------------------------------------------------------
+-- PERFILES (uno por usuario de auth.users)
+-- ---------------------------------------------------------
+create table if not exists public.perfiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  rol text not null check (rol in ('ALUMNO','PROFESOR','ADMIN')),
+  nombre text not null default '',
+  apellido text,
+  email text,
+  telefono text,
+  telefono_visible boolean not null default true,
+  instagram text,
+  categoria text default 'C8',
+  genero text default 'Caballero',
+  posicion text default 'Drive',
+  mano text default 'Derecha',
+  activo boolean not null default true,
+  creado_en timestamptz not null default now()
+);
+
+-- Función auxiliar: rol del usuario logueado (security definer = evita
+-- recursión infinita al usarla dentro de las políticas de "perfiles").
+create or replace function public.rol_actual()
+returns text
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select rol from public.perfiles where id = auth.uid()
+$$;
+
+alter table public.perfiles enable row level security;
+
+drop policy if exists "perfiles_select_propio" on public.perfiles;
+create policy "perfiles_select_propio" on public.perfiles
+  for select using (auth.uid() = id);
+
+drop policy if exists "perfiles_select_staff" on public.perfiles;
+create policy "perfiles_select_staff" on public.perfiles
+  for select using (public.rol_actual() in ('PROFESOR','ADMIN'));
+
+-- Cualquier usuario logueado puede ver los datos básicos de los profesores
+-- (los necesita para reservar clases y ver quién da cada clase).
+drop policy if exists "perfiles_select_profesores" on public.perfiles;
+create policy "perfiles_select_profesores" on public.perfiles
+  for select using (rol = 'PROFESOR');
+
+drop policy if exists "perfiles_update_propio" on public.perfiles;
+create policy "perfiles_update_propio" on public.perfiles
+  for update using (auth.uid() = id);
+
+drop policy if exists "perfiles_update_admin" on public.perfiles;
+create policy "perfiles_update_admin" on public.perfiles
+  for update using (public.rol_actual() = 'ADMIN');
+
+-- El profesor tiene que poder corregir datos de sus alumnos (categoría,
+-- género, posición, teléfono, etc.) desde "Gestión de alumnos". El trigger
+-- de más abajo (proteger_columnas_perfil) sigue evitando que, aunque tenga
+-- este permiso, pueda tocar "rol" o "activo" de nadie (eso sigue siendo
+-- solo de ADMIN).
+drop policy if exists "perfiles_update_staff" on public.perfiles;
+create policy "perfiles_update_staff" on public.perfiles
+  for update using (public.rol_actual() in ('PROFESOR','ADMIN'));
+
+-- RLS es a nivel de fila, no de columna: sin esto, cualquier alumno podría
+-- llamar a la API de Supabase directamente y ponerse rol='ADMIN' en su
+-- propia fila (la política de arriba solo mira que sea SU fila, no qué
+-- columnas cambia). Este trigger blindas "rol" y "activo": solo un ADMIN
+-- puede modificarlas, sin importar qué mande el resto de los updates.
+create or replace function public.proteger_columnas_perfil()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if public.rol_actual() <> 'ADMIN' then
+    new.rol := old.rol;
+    new.activo := old.activo;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trigger_proteger_columnas_perfil on public.perfiles;
+create trigger trigger_proteger_columnas_perfil
+  before update on public.perfiles
+  for each row execute function public.proteger_columnas_perfil();
+
+-- Alta automática de perfil cuando alguien se registra (auth.users)
+create or replace function public.manejar_nuevo_usuario()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.perfiles (id, rol, nombre, apellido, email, telefono, instagram, categoria, genero, posicion, mano, telefono_visible)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'rol', 'ALUMNO'),
+    coalesce(new.raw_user_meta_data->>'nombre', ''),
+    new.raw_user_meta_data->>'apellido',
+    new.email,
+    new.raw_user_meta_data->>'telefono',
+    new.raw_user_meta_data->>'instagram',
+    coalesce(new.raw_user_meta_data->>'categoria', 'C8'),
+    coalesce(new.raw_user_meta_data->>'genero', 'Caballero'),
+    coalesce(new.raw_user_meta_data->>'posicion', 'Drive'),
+    coalesce(new.raw_user_meta_data->>'mano', 'Derecha'),
+    coalesce((new.raw_user_meta_data->>'telefono_visible')::boolean, true)
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists trigger_manejar_nuevo_usuario on auth.users;
+create trigger trigger_manejar_nuevo_usuario
+  after insert on auth.users
+  for each row execute function public.manejar_nuevo_usuario();
+
+-- ---------------------------------------------------------
+-- CONFIGURACIÓN (precios, comisiones, etc. — una sola fila)
+-- ---------------------------------------------------------
+create table if not exists public.configuracion (
+  id int primary key default 1,
+  precio_individual numeric not null default 29000,
+  precio_grupal numeric not null default 22000,
+  descuento_abono_individual numeric not null default 6.5,
+  descuento_abono_grupal numeric not null default 5.5,
+  ipc numeric not null default 0,
+  rendicion_default text not null default 'semanal' check (rendicion_default in ('semanal','quincenal','mensual')),
+  comisiones jsonb not null default '{"1":20,"2":15,"3":10,"4":8}'::jsonb,
+  constraint configuracion_una_fila check (id = 1)
+);
+insert into public.configuracion (id) values (1) on conflict (id) do nothing;
+
+alter table public.configuracion enable row level security;
+
+drop policy if exists "configuracion_select_autenticados" on public.configuracion;
+create policy "configuracion_select_autenticados" on public.configuracion
+  for select using (auth.role() = 'authenticated');
+
+drop policy if exists "configuracion_update_admin" on public.configuracion;
+create policy "configuracion_update_admin" on public.configuracion
+  for update using (public.rol_actual() = 'ADMIN');
+
+-- ---------------------------------------------------------
+-- CLASES (turnos del calendario, con fecha real)
+-- ---------------------------------------------------------
+create table if not exists public.clases (
+  id uuid primary key default gen_random_uuid(),
+  fecha date not null,
+  hora text not null,
+  profesor_id uuid not null references public.perfiles(id),
+  estado text not null default 'disponible' check (estado in ('disponible','reservada','bloqueada')),
+  tipo text check (tipo in ('Individual','Grupal')),
+  estado_clase text not null default 'pendiente' check (estado_clase in ('pendiente','en proceso','finalizada')),
+  motivo text,
+  -- Contador de anotados, mantenido por los triggers de abajo. Existe para
+  -- que un alumno pueda ver si una clase grupal tiene lugar sin necesitar
+  -- permiso para leer las reservas de otros alumnos (eso lo bloquea RLS).
+  cupo_ocupado int not null default 0,
+  creado_en timestamptz not null default now(),
+  unique (fecha, hora, profesor_id)
+);
+
+create index if not exists clases_fecha_idx on public.clases (fecha);
+
+-- Migración: grilla de 30 minutos con clases de 60 o 90 minutos. La clase
+-- "dueña" del turno (la que el alumno reservó primero) guarda en
+-- `clases_extendidas` los ids de los tramos de 30' que también ocupa; esos
+-- tramos quedan marcados con `es_continuacion = true` y no se pueden
+-- reservar por separado. Ver trigger `antes_insertar_reserva` más abajo.
+alter table public.clases add column if not exists duracion_minutos int not null default 60;
+alter table public.clases add column if not exists es_continuacion boolean not null default false;
+alter table public.clases add column if not exists continuacion_de uuid references public.clases(id);
+alter table public.clases add column if not exists clases_extendidas uuid[] not null default '{}';
+
+alter table public.clases enable row level security;
+
+drop policy if exists "clases_select_autenticados" on public.clases;
+create policy "clases_select_autenticados" on public.clases
+  for select using (auth.role() = 'authenticated');
+
+drop policy if exists "clases_all_profesor_propio" on public.clases;
+create policy "clases_all_profesor_propio" on public.clases
+  for all using (profesor_id = auth.uid()) with check (profesor_id = auth.uid());
+
+drop policy if exists "clases_all_admin" on public.clases;
+create policy "clases_all_admin" on public.clases
+  for all using (public.rol_actual() = 'ADMIN') with check (public.rol_actual() = 'ADMIN');
+
+-- ---------------------------------------------------------
+-- RESERVAS (un alumno reserva una clase; varias reservas por
+-- clase si es "Grupal")
+-- ---------------------------------------------------------
+create table if not exists public.reservas (
+  id uuid primary key default gen_random_uuid(),
+  clase_id uuid not null references public.clases(id) on delete cascade,
+  alumno_id uuid not null references public.perfiles(id),
+  tipo text not null check (tipo in ('Individual','Grupal')),
+  forma_pago text not null check (forma_pago in ('clase','abono')),
+  metodo_pago text check (metodo_pago in ('mercadopago','transferencia','efectivo')),
+  monto numeric not null default 0,
+  pagado boolean not null default false,
+  comprobante_url text,
+  mp_preference_id text,
+  mp_payment_id text,
+  creado_en timestamptz not null default now()
+);
+
+create index if not exists reservas_clase_idx on public.reservas (clase_id);
+create index if not exists reservas_alumno_idx on public.reservas (alumno_id);
+
+-- Migración: duración elegida por el alumno (60 o 90 minutos). Es
+-- informativa/para mostrar y calcular el precio; la que manda para bloquear
+-- horarios es la que queda guardada en `clases.duracion_minutos` una vez
+-- que el trigger de abajo la confirma.
+alter table public.reservas add column if not exists duracion_minutos int not null default 60;
+
+alter table public.reservas enable row level security;
+
+drop policy if exists "reservas_select_propias" on public.reservas;
+create policy "reservas_select_propias" on public.reservas
+  for select using (alumno_id = auth.uid());
+
+drop policy if exists "reservas_select_staff" on public.reservas;
+create policy "reservas_select_staff" on public.reservas
+  for select using (public.rol_actual() in ('PROFESOR','ADMIN'));
+
+drop policy if exists "reservas_insert_propias" on public.reservas;
+create policy "reservas_insert_propias" on public.reservas
+  for insert with check (alumno_id = auth.uid());
+
+-- El profesor/admin puede anotar reservas "a mano" (alumnos que avisan por
+-- WhatsApp o en persona) a nombre de cualquier alumno.
+drop policy if exists "reservas_insert_staff" on public.reservas;
+create policy "reservas_insert_staff" on public.reservas
+  for insert with check (public.rol_actual() in ('PROFESOR','ADMIN'));
+
+drop policy if exists "reservas_update_propias" on public.reservas;
+create policy "reservas_update_propias" on public.reservas
+  for update using (alumno_id = auth.uid());
+
+drop policy if exists "reservas_update_staff" on public.reservas;
+create policy "reservas_update_staff" on public.reservas
+  for update using (public.rol_actual() in ('PROFESOR','ADMIN'));
+
+drop policy if exists "reservas_delete_propias" on public.reservas;
+create policy "reservas_delete_propias" on public.reservas
+  for delete using (alumno_id = auth.uid());
+
+drop policy if exists "reservas_delete_staff" on public.reservas;
+create policy "reservas_delete_staff" on public.reservas
+  for delete using (public.rol_actual() in ('PROFESOR','ADMIN'));
+
+-- Reglas de integridad: al insertar una reserva, valida cupo/tipo y marca
+-- la clase como "reservada". Como ahora la grilla es de 30 minutos y una
+-- clase puede durar 60 o 90 minutos, además reserva los tramos de 30' que
+-- la clase ocupa a continuación (para que nadie pueda reservar encima) y
+-- deja anotado en `clases.clases_extendidas` cuáles son, así se pueden
+-- liberar correctamente si se cancela. Corre ANTES del insert (así, si algo
+-- no cierra, aborta con una excepción y la fila nunca llega a guardarse).
+-- Corre con permisos de servidor así que un alumno no puede saltearse las
+-- reglas aunque manipule el pedido.
+create or replace function public.antes_insertar_reserva()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_fecha date;
+  v_hora text;
+  v_profesor_id uuid;
+  v_tipo_actual text;
+  v_estado_actual text;
+  v_duracion_actual int;
+  v_cupo_grupal constant int := 4;
+  v_pasos int;
+  v_id_extra uuid;
+  v_estado_extra text;
+  v_ids_extra uuid[] := '{}';
+  i int;
+begin
+  if new.duracion_minutos not in (60, 90) then
+    raise exception 'La duración de la clase tiene que ser 60 o 90 minutos.';
+  end if;
+
+  select fecha, hora, profesor_id, tipo, estado, duracion_minutos
+    into v_fecha, v_hora, v_profesor_id, v_tipo_actual, v_estado_actual, v_duracion_actual
+    from public.clases where id = new.clase_id for update;
+
+  if v_fecha is null then
+    raise exception 'Ese horario no existe.';
+  end if;
+
+  if v_estado_actual = 'bloqueada' then
+    raise exception 'Ese horario está bloqueado.';
+  end if;
+
+  if v_tipo_actual is not null and v_tipo_actual <> new.tipo then
+    raise exception 'Ese horario ya fue reservado como clase %.', v_tipo_actual;
+  end if;
+
+  if new.tipo = 'Individual' then
+    if v_estado_actual = 'reservada' then
+      raise exception 'Ese horario ya está reservado.';
+    end if;
+  else
+    if (select count(*) from public.reservas where clase_id = new.clase_id) >= v_cupo_grupal then
+      raise exception 'Esa clase grupal ya alcanzó el cupo máximo (%).', v_cupo_grupal;
+    end if;
+    -- Si ya hay alumnos anotados, la duración la fija el primero: los que
+    -- se suman después tienen que coincidir (la reserva ya está armada con
+    -- los tramos de 30' que corresponden a esa duración, no a otra).
+    if v_estado_actual = 'reservada' and new.duracion_minutos <> v_duracion_actual then
+      raise exception 'Esta clase grupal ya quedó fijada en % minutos.', v_duracion_actual;
+    end if;
+  end if;
+
+  if v_estado_actual = 'disponible' then
+    -- Primer alumno de este horario: además de marcarlo reservado, hay que
+    -- bloquear los tramos de 30' siguientes que la clase ocupa (1 tramo
+    -- extra para 60', 2 tramos extra para 90').
+    v_pasos := (new.duracion_minutos / 30) - 1;
+    for i in 1..v_pasos loop
+      select id, estado into v_id_extra, v_estado_extra
+        from public.clases
+        where fecha = v_fecha and profesor_id = v_profesor_id
+          and hora = to_char((v_hora::time + (i * 30 || ' minutes')::interval), 'HH24:MI')
+        for update;
+
+      if v_id_extra is null or v_estado_extra <> 'disponible' then
+        raise exception 'No hay horario libre a continuación para una clase de % minutos. Probá otro horario o una duración más corta.', new.duracion_minutos;
+      end if;
+
+      v_ids_extra := array_append(v_ids_extra, v_id_extra);
+    end loop;
+
+    update public.clases
+      set estado = 'reservada', tipo = new.tipo, duracion_minutos = new.duracion_minutos,
+          cupo_ocupado = cupo_ocupado + 1, clases_extendidas = v_ids_extra
+      where id = new.clase_id;
+
+    if array_length(v_ids_extra, 1) > 0 then
+      update public.clases
+        set estado = 'reservada', tipo = new.tipo, es_continuacion = true, continuacion_de = new.clase_id
+        where id = any (v_ids_extra);
+    end if;
+  else
+    -- Se suma a una clase grupal que ya estaba reservada: los tramos
+    -- extendidos ya los reservó el primer alumno, acá solo suma cupo.
+    update public.clases set cupo_ocupado = cupo_ocupado + 1 where id = new.clase_id;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trigger_despues_insertar_reserva on public.reservas;
+drop trigger if exists trigger_antes_insertar_reserva on public.reservas;
+create trigger trigger_antes_insertar_reserva
+  before insert on public.reservas
+  for each row execute function public.antes_insertar_reserva();
+
+drop function if exists public.despues_insertar_reserva();
+
+-- Al cancelar la última reserva de una clase, la vuelve a dejar libre junto
+-- con los tramos de 30' que hubiera ocupado de más (clases_extendidas).
+create or replace function public.despues_borrar_reserva()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_extendidas uuid[];
+begin
+  if not exists (select 1 from public.reservas where clase_id = old.clase_id) then
+    select clases_extendidas into v_extendidas from public.clases where id = old.clase_id;
+
+    update public.clases
+      set estado = 'disponible', tipo = null, cupo_ocupado = 0, duracion_minutos = 60, clases_extendidas = '{}'
+      where id = old.clase_id;
+
+    if v_extendidas is not null and array_length(v_extendidas, 1) > 0 then
+      update public.clases
+        set estado = 'disponible', tipo = null, cupo_ocupado = 0, es_continuacion = false, continuacion_de = null
+        where id = any (v_extendidas);
+    end if;
+  else
+    update public.clases set cupo_ocupado = greatest(cupo_ocupado - 1, 0) where id = old.clase_id;
+  end if;
+  return old;
+end;
+$$;
+
+drop trigger if exists trigger_despues_borrar_reserva on public.reservas;
+create trigger trigger_despues_borrar_reserva
+  after delete on public.reservas
+  for each row execute function public.despues_borrar_reserva();
+
+-- Un alumno puede actualizar su propia reserva (por ejemplo, para adjuntar
+-- un comprobante), pero no debería poder marcarse el pago como hecho o
+-- cambiarse el monto llamando directo a la API. Esto lo blinda: si quien
+-- actualiza es un ALUMNO, esas columnas quedan como estaban.
+create or replace function public.proteger_columnas_reserva()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if public.rol_actual() = 'ALUMNO' then
+    new.pagado := old.pagado;
+    new.monto := old.monto;
+    new.mp_payment_id := old.mp_payment_id;
+    new.mp_preference_id := old.mp_preference_id;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trigger_proteger_columnas_reserva on public.reservas;
+create trigger trigger_proteger_columnas_reserva
+  before update on public.reservas
+  for each row execute function public.proteger_columnas_reserva();
+
+-- ---------------------------------------------------------
+-- PLANILLAS TÉCNICAS (progreso por alumno y golpe)
+-- ---------------------------------------------------------
+create table if not exists public.planillas_tecnicas (
+  id uuid primary key default gen_random_uuid(),
+  alumno_id uuid not null references public.perfiles(id),
+  categoria_id text not null,
+  golpe text not null,
+  trabajado boolean not null default false,
+  puntaje_alumno int not null default 0,
+  puntaje_profesor int not null default 0,
+  observacion text,
+  actualizado_en timestamptz not null default now(),
+  unique (alumno_id, categoria_id, golpe)
+);
+
+alter table public.planillas_tecnicas enable row level security;
+
+drop policy if exists "planillas_select_propia" on public.planillas_tecnicas;
+create policy "planillas_select_propia" on public.planillas_tecnicas
+  for select using (alumno_id = auth.uid());
+
+drop policy if exists "planillas_select_staff" on public.planillas_tecnicas;
+create policy "planillas_select_staff" on public.planillas_tecnicas
+  for select using (public.rol_actual() in ('PROFESOR','ADMIN'));
+
+drop policy if exists "planillas_all_staff" on public.planillas_tecnicas;
+create policy "planillas_all_staff" on public.planillas_tecnicas
+  for all using (public.rol_actual() in ('PROFESOR','ADMIN')) with check (public.rol_actual() in ('PROFESOR','ADMIN'));
+
+-- ---------------------------------------------------------
+-- RENDICIONES (pagos del profesor al club)
+-- ---------------------------------------------------------
+create table if not exists public.rendiciones (
+  id uuid primary key default gen_random_uuid(),
+  profesor_id uuid not null references public.perfiles(id),
+  periodo text not null check (periodo in ('semanal','quincenal','mensual')),
+  desde date not null,
+  hasta date not null,
+  monto numeric not null default 0,
+  estado text not null default 'pendiente' check (estado in ('pendiente','transferencia','efectivo')),
+  comprobante_url text,
+  pagado_en timestamptz,
+  creado_en timestamptz not null default now()
+);
+
+alter table public.rendiciones enable row level security;
+
+drop policy if exists "rendiciones_select_propias" on public.rendiciones;
+create policy "rendiciones_select_propias" on public.rendiciones
+  for select using (profesor_id = auth.uid());
+
+drop policy if exists "rendiciones_select_admin" on public.rendiciones;
+create policy "rendiciones_select_admin" on public.rendiciones
+  for select using (public.rol_actual() = 'ADMIN');
+
+drop policy if exists "rendiciones_insert_propias" on public.rendiciones;
+create policy "rendiciones_insert_propias" on public.rendiciones
+  for insert with check (profesor_id = auth.uid());
+
+drop policy if exists "rendiciones_update_propias" on public.rendiciones;
+create policy "rendiciones_update_propias" on public.rendiciones
+  for update using (profesor_id = auth.uid());
+
+drop policy if exists "rendiciones_all_admin" on public.rendiciones;
+create policy "rendiciones_all_admin" on public.rendiciones
+  for all using (public.rol_actual() = 'ADMIN') with check (public.rol_actual() = 'ADMIN');
+
+-- ---------------------------------------------------------
+-- STORAGE: comprobantes de pago (transferencia / efectivo / rendición)
+-- ---------------------------------------------------------
+insert into storage.buckets (id, name, public)
+values ('comprobantes', 'comprobantes', false)
+on conflict (id) do nothing;
+
+drop policy if exists "comprobantes_insert_autenticados" on storage.objects;
+create policy "comprobantes_insert_autenticados" on storage.objects
+  for insert to authenticated with check (bucket_id = 'comprobantes');
+
+drop policy if exists "comprobantes_select_autenticados" on storage.objects;
+create policy "comprobantes_select_autenticados" on storage.objects
+  for select to authenticated using (bucket_id = 'comprobantes');
+
+-- ---------------------------------------------------------
+-- STORAGE: fotos de perfil (bucket público, son de baja sensibilidad y así
+-- se pueden mostrar directo en <img> sin generar URLs firmadas)
+-- ---------------------------------------------------------
+insert into storage.buckets (id, name, public)
+values ('fotos', 'fotos', true)
+on conflict (id) do nothing;
+
+drop policy if exists "fotos_insert_autenticados" on storage.objects;
+create policy "fotos_insert_autenticados" on storage.objects
+  for insert to authenticated with check (bucket_id = 'fotos');
+
+drop policy if exists "fotos_update_autenticados" on storage.objects;
+create policy "fotos_update_autenticados" on storage.objects
+  for update to authenticated using (bucket_id = 'fotos');
+
+drop policy if exists "fotos_select_publico" on storage.objects;
+create policy "fotos_select_publico" on storage.objects
+  for select using (bucket_id = 'fotos');
+
+-- =========================================================
+-- Fin del esquema.
+-- Para crear tu usuario PROFESOR o ADMIN (no se registran desde la
+-- app pública, es una acción manual tuya por seguridad):
+--   1) Supabase → Authentication → Users → Add user (email + contraseña)
+--   2) Corré esto reemplazando el email:
+--      update public.perfiles set rol = 'PROFESOR', nombre = 'Leandro Santagada'
+--      where email = 'profesor@tudominio.com';
+-- =========================================================

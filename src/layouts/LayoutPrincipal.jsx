@@ -1,0 +1,66 @@
+import { NavLink } from "react-router-dom";
+import usarAutenticacion from "../ganchos/usarAutenticacion.js";
+import Icono from "../componentes/ui/Icono.jsx";
+
+const enlaces = {
+  ALUMNO: [
+    ["/alumno", "Inicio", "inicio"],
+    ["/alumno/reservas", "Reservas", "calendario"],
+    ["/alumno/progreso", "Progreso", "progreso"],
+    ["/alumno/perfil", "Perfil", "perfil"],
+  ],
+  PROFESOR: [
+    ["/profesor", "Panel", "inicio"],
+    ["/profesor/calendario", "Calendario", "calendario"],
+    ["/profesor/alumnos", "Alumnos", "alumnos"],
+    ["/profesor/comisiones", "Comisiones club", "comisiones"],
+  ],
+  ADMIN: [
+    ["/admin", "Panel", "inicio"],
+    ["/admin/rendiciones", "Rendiciones", "rendiciones"],
+    ["/admin/estadisticas", "Estadísticas", "estadisticas"],
+    ["/admin/configuracion", "Configuración", "configuracion"],
+  ],
+};
+
+export default function LayoutPrincipal({ titulo, subtitulo, children }) {
+  const { usuario, cerrarSesion } = usarAutenticacion();
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="marca">
+          <span>LS</span>
+          <div>
+            <strong>Padel Coach</strong>
+            <small>{usuario?.rol}</small>
+          </div>
+        </div>
+        <nav>
+          {enlaces[usuario?.rol]?.map(([to, label, icono]) => (
+            <NavLink key={to} to={to} end={to === "/alumno" || to === "/profesor" || to === "/admin"}>
+              <Icono nombre={icono} />
+              <span>{label}</span>
+            </NavLink>
+          ))}
+        </nav>
+        <button className="boton-secundario boton-salir" onClick={cerrarSesion}>
+          <Icono nombre="salir" />
+          <span>Cerrar sesión</span>
+        </button>
+      </aside>
+      <main className="contenido">
+        <header className="topbar">
+          <div>
+            <h1>{titulo}</h1>
+            <p>{subtitulo}</p>
+          </div>
+          <div className="usuario-chip">
+            <span className="avatar-mini">{usuario?.nombre?.charAt(0)}</span>
+            {usuario?.nombre}
+          </div>
+        </header>
+        {children}
+      </main>
+    </div>
+  );
+}
