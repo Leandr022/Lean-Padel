@@ -9,7 +9,9 @@ serverless).
 
 ## Qué incluye
 
-- Login por rol (Alumno / Profesor / Admin) con Supabase Auth real.
+- Login por rol (Alumno / Profesor / Admin) con Supabase Auth real, con
+  opción de "Continuar con Google" además de email y contraseña (ver
+  configuración más abajo).
 - Registro público de alumnos (Profesor y Admin se crean a mano, ver abajo).
 - Calendario semanal con fechas reales (no genérico): el profesor abre sus
   horarios semana a semana, los alumnos reservan lo que está abierto.
@@ -38,7 +40,14 @@ serverless).
 - Planilla técnica por alumno con seguimiento golpe a golpe (la completa el
   profesor; el alumno la ve en modo lectura).
 - Aviso automático por WhatsApp al profesor cada vez que un alumno reserva
-  una clase (vía CallMeBot, ver sección más abajo).
+  una clase (vía CallMeBot, ver sección más abajo). Se puede prender o
+  apagar desde "Configuración" en el panel del profesor.
+- Botón "Recordarle por WhatsApp" en cada alumno anotado a una clase: le
+  abre al profesor WhatsApp con un mensaje ya armado (fecha y hora de la
+  clase) para que lo revise y lo mande él mismo con un clic — no es un envío
+  automático, así que no hace falta ninguna configuración extra.
+- Pantalla de "Configuración" del profesor: nombre de cuenta editable,
+  on/off del aviso de WhatsApp, y accesos directos a Horarios y Comisiones.
 - Comisiones y rendiciones al club, con aviso de pago y confirmación admin.
   El profesor puede cargar el % de comisión que le fija el club (según la
   cantidad de alumnos por clase) desde su propia pantalla de "Comisiones",
@@ -157,12 +166,50 @@ mensajes a los alumnos, pero alcanza de sobra para este aviso.
 5. Guardá, y probá reservando una clase de prueba: te debería llegar el
    WhatsApp al toque.
 
-## 5) Configurar las variables de entorno
+## 5) Activar el login con Google
+
+Para que aparezca el botón "Continuar con Google" tanto en el login como en
+el registro, hay que crear credenciales OAuth en Google y cargarlas en
+Supabase. Esto lo tenés que hacer vos con tu cuenta de Google — es
+configuración de cuenta externa, nadie puede hacerlo por vos.
+
+1. Andá a [console.cloud.google.com](https://console.cloud.google.com/),
+   creá un proyecto (o usá uno existente).
+2. Andá a **APIs y servicios → Pantalla de consentimiento de OAuth**,
+   elegí "Externo" y completá los datos mínimos (nombre de la app, tu
+   email). No hace falta verificarla ante Google para que la usen vos y tus
+   alumnos.
+3. Andá a **APIs y servicios → Credenciales → Crear credenciales → ID de
+   cliente de OAuth**, tipo "Aplicación web".
+4. En **Orígenes autorizados de JavaScript** agregá tu URL de Vercel (por
+   ejemplo `https://lean-padel.vercel.app`) y, si probás en local,
+   `http://localhost:5173`.
+5. En **URI de redireccionamiento autorizados** agregá la URL de callback
+   que te muestra Supabase en el paso siguiente (con forma
+   `https://<tu-proyecto>.supabase.co/auth/v1/callback`).
+6. Copiá el **Client ID** y el **Client secret** que te da Google.
+7. En Supabase, andá a **Authentication → Providers → Google**, activalo y
+   pegá ahí el Client ID y el Client secret.
+8. En **Authentication → URL Configuration**, revisá que el "Site URL" sea
+   tu URL de Vercel, y que en "Redirect URLs" esté esa misma URL (con
+   `/login` al final, por ejemplo `https://lean-padel.vercel.app/login`) y,
+   si probás en local, `http://localhost:5173/login`.
+9. Probá desde el login o el registro: "Continuar con Google" te tiene que
+   llevar a elegir tu cuenta de Google y volver ya logueado.
+
+Si un profesor o admin que ya tiene cuenta con email y contraseña quiere
+loguearse con Google, tiene que usar exactamente el mismo email en su
+cuenta de Google — Supabase enlaza automáticamente la cuenta existente
+cuando el email coincide. Si usa un email de Google distinto, se le crea
+una cuenta nueva de alumno (por eso, si eso pasa, avisale que use el email
+correcto o pedile a un admin que le cambie el rol a esa cuenta nueva).
+
+## 6) Configurar las variables de entorno
 
 Copiá `.env.example` a `.env.local` y completá los valores de los pasos 1,
 2, 3 y 4. `VITE_SITE_URL` en desarrollo queda como `http://localhost:5173`.
 
-## 6) Correr en local
+## 7) Correr en local
 
 ```bash
 npm install
@@ -174,7 +221,7 @@ pública), así que el pago online solo se puede probar una vez desplegado en
 Vercel. En local podés probar el resto del flujo (transferencia, efectivo,
 calendario, planilla técnica, etc.) sin problema.
 
-## 7) Publicar en Vercel
+## 8) Publicar en Vercel
 
 1. Subí este proyecto a un repositorio de GitHub.
 2. Entrá a [vercel.com](https://vercel.com), creá una cuenta (podés usar tu

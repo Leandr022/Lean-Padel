@@ -6,6 +6,7 @@ import { formatearLargo } from "../../utilidades/fechas.js";
 import { crearOActualizarClase, eliminarClase } from "../../servicios/clases.js";
 import { cancelarReserva, crearReserva, marcarPagoReserva, urlFirmadaComprobante } from "../../servicios/reservas.js";
 import { listarAlumnos } from "../../servicios/perfiles.js";
+import { linkWhatsapp } from "../../utilidades/whatsapp.js";
 
 export default function ModalClaseProfesor({ info, precios, profesorId, onCerrar, onGuardado, onActualizar }) {
   const { clase, editable } = info;
@@ -101,6 +102,21 @@ export default function ModalClaseProfesor({ info, precios, profesorId, onCerrar
     }
   }
 
+  // Abre WhatsApp con un mensaje ya armado para recordarle la clase al
+  // alumno — el profesor lo revisa y lo manda él mismo con un clic, no se
+  // envía nada solo. Útil para el que no confirmó, o simplemente como
+  // gentileza antes de la clase.
+  function recordarPorWhatsapp(reserva) {
+    const cuando = `${formatearLargo(new Date(`${fecha}T00:00:00`))} a las ${hora}`;
+    const mensaje = `Hola ${reserva.perfiles?.nombre || ""}! Te escribo para recordarte tu clase de pádel el ${cuando} hs. ¡Nos vemos! 🎾`;
+    const url = linkWhatsapp(reserva.perfiles?.telefono, mensaje);
+    if (!url) {
+      setError("Este alumno no tiene un teléfono cargado (o el formato no se pudo interpretar).");
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
   return (
     <div className="modal-fondo">
       <article className="modal limpio">
@@ -193,6 +209,9 @@ export default function ModalClaseProfesor({ info, precios, profesorId, onCerrar
                       onClick={() => ejecutarSinCerrar(() => marcarPagoReserva(r.id, { pagado: !r.pagado }))}
                     >
                       {r.pagado ? "Marcar como no pagado" : "Marcar como pagado"}
+                    </button>
+                    <button type="button" className="boton-secundario" onClick={() => recordarPorWhatsapp(r)}>
+                      Recordarle por WhatsApp
                     </button>
                     <button type="button" className="boton-peligro" disabled={enviando} onClick={() => ejecutarSinCerrar(() => cancelarReserva(r.id))}>
                       Cancelar

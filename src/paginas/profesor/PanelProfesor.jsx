@@ -32,6 +32,7 @@ export default function PanelProfesor() {
         <Link className="dashboard-card verde" to="/profesor/calendario"><Icono nombre="calendario" /><span>Calendario</span></Link>
         <Link className="dashboard-card azul" to="/profesor/alumnos"><Icono nombre="alumnos" /><span>Alumnos</span></Link>
         <Link className="dashboard-card naranja" to="/profesor/comisiones"><Icono nombre="comisiones" /><span>Comisiones club</span></Link>
+        <Link className="dashboard-card violeta" to="/profesor/configuracion"><Icono nombre="configuracion" /><span>Configuración</span></Link>
       </section>
     </LayoutPrincipal>
   );

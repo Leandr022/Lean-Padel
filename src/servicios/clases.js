@@ -5,7 +5,7 @@ import { horariosApertura } from "../datos/clases.js";
 export async function listarClasesRango(desde, hasta) {
   const { data, error } = await supabase
     .from("clases")
-    .select("*, reservas(*, perfiles:alumno_id(id, nombre, categoria, genero))")
+    .select("*, reservas(*, perfiles:alumno_id(id, nombre, categoria, genero, telefono))")
     .gte("fecha", desde)
     .lte("fecha", hasta)
     .order("fecha", { ascending: true })

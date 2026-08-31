@@ -327,6 +327,46 @@ textarea {
   transform: translateY(0);
 }
 
+.boton-google {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  padding: 13px 22px;
+  font-weight: 700;
+  cursor: pointer;
+  background: #fff;
+  color: #1f2937;
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.boton-google:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 26px rgba(255, 255, 255, 0.12);
+}
+
+.boton-google:disabled {
+  opacity: 0.7;
+  cursor: default;
+  transform: none;
+}
+
+.separador-o {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.separador-o::before,
+.separador-o::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
 .registro-link {
   border-top: 1px solid rgba(46, 168, 255, 0.16);
   margin-top: 22px;

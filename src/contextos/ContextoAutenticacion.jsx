@@ -70,6 +70,19 @@ export default function ProveedorAutenticacion({ children }) {
     return { ok: true, perfil };
   }
 
+  // Login con Google: redirige a Google y vuelve a "redirectTo". Sirve tanto
+  // para iniciar sesión (si la cuenta ya existe) como para crearla la
+  // primera vez (el trigger manejar_nuevo_usuario arma el perfil solo, con
+  // rol ALUMNO por defecto — igual que hoy con el registro por formulario).
+  async function iniciarSesionConGoogle() {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/login` },
+    });
+    if (error) return { ok: false, mensaje: error.message };
+    return { ok: true };
+  }
+
   async function cerrarSesion() {
     await supabase.auth.signOut();
     setUsuario(null);
@@ -99,7 +112,7 @@ export default function ProveedorAutenticacion({ children }) {
   }
 
   return (
-    <ContextoAutenticacion.Provider value={{ usuario, cargando, iniciarSesion, cerrarSesion, registrarAlumno }}>
+    <ContextoAutenticacion.Provider value={{ usuario, cargando, iniciarSesion, iniciarSesionConGoogle, cerrarSesion, registrarAlumno }}>
       {children}
     </ContextoAutenticacion.Provider>
   );

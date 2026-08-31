@@ -41,12 +41,19 @@ export default async function handler(req, res) {
     const admin = crearClienteAdmin();
     const { data: reserva, error } = await admin
       .from("reservas")
-      .select("*, perfiles:alumno_id(nombre), clases:clase_id(fecha, hora)")
+      .select("*, perfiles:alumno_id(nombre), clases:clase_id(fecha, hora, profesor_id, profesor:profesor_id(avisos_whatsapp_activo))")
       .eq("id", registro.id)
       .single();
     if (error || !reserva) {
       console.error("No se encontró la reserva para avisar:", registro.id, error);
       res.status(200).send("reserva no encontrada, ignorado");
+      return;
+    }
+
+    // El profesor puede apagar este aviso desde su pantalla de
+    // Configuración (columna perfiles.avisos_whatsapp_activo).
+    if (reserva.clases?.profesor?.avisos_whatsapp_activo === false) {
+      res.status(200).send("aviso desactivado por el profesor, ignorado");
       return;
     }
 

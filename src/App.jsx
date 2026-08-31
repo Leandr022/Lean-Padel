@@ -13,6 +13,7 @@ import PanelProfesor from "./paginas/profesor/PanelProfesor.jsx";
 import CalendarioProfesor from "./paginas/profesor/CalendarioProfesor.jsx";
 import AlumnosProfesor from "./paginas/profesor/AlumnosProfesor.jsx";
 import ComisionesProfesor from "./paginas/profesor/ComisionesProfesor.jsx";
+import ConfiguracionProfesor from "./paginas/profesor/ConfiguracionProfesor.jsx";
 import PanelAdmin from "./paginas/admin/PanelAdmin.jsx";
 import RendicionesAdmin from "./paginas/admin/RendicionesAdmin.jsx";
 import EstadisticasAdmin from "./paginas/admin/EstadisticasAdmin.jsx";
@@ -37,6 +38,7 @@ export default function App() {
       <Route path="/profesor/calendario" element={<RutaProtegida roles={["PROFESOR"]}><CalendarioProfesor /></RutaProtegida>} />
       <Route path="/profesor/alumnos" element={<RutaProtegida roles={["PROFESOR"]}><AlumnosProfesor /></RutaProtegida>} />
       <Route path="/profesor/comisiones" element={<RutaProtegida roles={["PROFESOR"]}><ComisionesProfesor /></RutaProtegida>} />
+      <Route path="/profesor/configuracion" element={<RutaProtegida roles={["PROFESOR"]}><ConfiguracionProfesor /></RutaProtegida>} />
 
       <Route path="/admin" element={<RutaProtegida roles={["ADMIN"]}><PanelAdmin /></RutaProtegida>} />
       <Route path="/admin/rendiciones" element={<RutaProtegida roles={["ADMIN"]}><RendicionesAdmin /></RutaProtegida>} />

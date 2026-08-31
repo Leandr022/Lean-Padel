@@ -13,8 +13,9 @@ const campos = [
 ];
 
 export default function Registro() {
-  const { registrarAlumno } = usarAutenticacion();
+  const { registrarAlumno, iniciarSesionConGoogle } = usarAutenticacion();
   const navigate = useNavigate();
+  const [enviandoGoogle, setEnviandoGoogle] = useState(false);
   const [form, setForm] = useState({
     nombre: "",
     apellido: "",
@@ -45,6 +46,16 @@ export default function Registro() {
 
   const opcionesCategoria = categoriasPorGenero(form.genero);
 
+  async function conGoogle() {
+    setError("");
+    setEnviandoGoogle(true);
+    const resultado = await iniciarSesionConGoogle();
+    if (!resultado.ok) {
+      setError(resultado.mensaje);
+      setEnviandoGoogle(false);
+    }
+  }
+
   async function enviar(e) {
     e.preventDefault();
     setError("");
@@ -69,6 +80,15 @@ export default function Registro() {
         <div className="brand-badge">LS</div>
         <h1>Crear perfil de alumno</h1>
         <p>Estos datos se usan para reservar clases, compatibilidad de categorías y seguimiento técnico.</p>
+
+        <button type="button" className="boton-google" disabled={enviandoGoogle} onClick={conGoogle}>
+          {enviandoGoogle ? "Redirigiendo a Google…" : "Registrarme con Google"}
+        </button>
+        <p className="texto-muted" style={{ marginTop: "-0.5rem" }}>
+          Creamos tu cuenta con tu nombre de Google. Categoría, teléfono e Instagram los completás después desde "Mi perfil".
+        </p>
+        <div className="separador-o"><span>o completá el formulario</span></div>
+
         <form className="login-form grid-dos" onSubmit={enviar}>
           {campos.map(({ clave, etiqueta }) => (
             <label key={clave}>

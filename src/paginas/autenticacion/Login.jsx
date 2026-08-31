@@ -1,18 +1,26 @@
 import { Link, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import usarAutenticacion from "../../ganchos/usarAutenticacion.js";
 
 const rutaPorRol = { ALUMNO: "/alumno", PROFESOR: "/profesor", ADMIN: "/admin" };
 const ejemploPorRol = { ALUMNO: "alumno@tuclub.com", PROFESOR: "profesor@tuclub.com", ADMIN: "admin@tuclub.com" };
 
 export default function Login() {
-  const { iniciarSesion } = usarAutenticacion();
+  const { usuario, cargando, iniciarSesion, iniciarSesionConGoogle } = usarAutenticacion();
   const navigate = useNavigate();
   const [rol, setRol] = useState("ALUMNO");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [enviando, setEnviando] = useState(false);
+  const [enviandoGoogle, setEnviandoGoogle] = useState(false);
+
+  // Cubre el regreso desde Google: la sesión se arma sola (supabase-js lee
+  // el token de la URL), y en cuanto el perfil termina de cargar mandamos a
+  // cada quien a su panel según el rol que ya tiene guardado.
+  useEffect(() => {
+    if (!cargando && usuario) navigate(rutaPorRol[usuario.rol] || "/login", { replace: true });
+  }, [usuario, cargando, navigate]);
 
   function cambiarRol(nuevoRol) {
     setRol(nuevoRol);
@@ -30,6 +38,18 @@ export default function Login() {
       return;
     }
     navigate(rutaPorRol[rol]);
+  }
+
+  async function conGoogle() {
+    setError("");
+    setEnviandoGoogle(true);
+    const resultado = await iniciarSesionConGoogle();
+    if (!resultado.ok) {
+      setError(resultado.mensaje);
+      setEnviandoGoogle(false);
+    }
+    // Si salió bien no hay nada más que hacer acá: el navegador se va a
+    // Google y vuelve solo a esta misma página con la sesión ya iniciada.
   }
 
   return (
@@ -53,6 +73,12 @@ export default function Login() {
           {error && <div className="error-box">{error}</div>}
           <button className="boton-principal" type="submit" disabled={enviando}>{enviando ? "Ingresando…" : "Ingresar"}</button>
         </form>
+
+        <div className="separador-o"><span>o</span></div>
+
+        <button type="button" className="boton-google" disabled={enviandoGoogle} onClick={conGoogle}>
+          {enviandoGoogle ? "Redirigiendo a Google…" : "Continuar con Google"}
+        </button>
 
         <div className="registro-link">
           <span>¿Todavía no tenés cuenta?</span>

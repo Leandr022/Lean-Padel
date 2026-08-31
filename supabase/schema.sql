@@ -23,8 +23,16 @@ create table if not exists public.perfiles (
   posicion text default 'Drive',
   mano text default 'Derecha',
   activo boolean not null default true,
-  creado_en timestamptz not null default now()
+  creado_en timestamptz not null default now(),
+  foto_url text,
+  -- Le permite a cada profesor prender/apagar por su cuenta el aviso por
+  -- WhatsApp que le llega cuando un alumno reserva (ver api/notificar-reserva.js).
+  avisos_whatsapp_activo boolean not null default true
 );
+-- Migración para bases ya creadas antes de esta columna (evita reventar en
+-- proyectos existentes al no tener "if not exists" en el create table).
+alter table public.perfiles add column if not exists foto_url text;
+alter table public.perfiles add column if not exists avisos_whatsapp_activo boolean not null default true;
 
 -- Función auxiliar: rol del usuario logueado (security definer = evita
 -- recursión infinita al usarla dentro de las políticas de "perfiles").
@@ -100,7 +108,11 @@ create trigger trigger_proteger_columnas_perfil
   before update on public.perfiles
   for each row execute function public.proteger_columnas_perfil();
 
--- Alta automática de perfil cuando alguien se registra (auth.users)
+-- Alta automática de perfil cuando alguien se registra (auth.users).
+-- Cubre tanto el registro con el formulario propio (manda "nombre", etc. en
+-- las opciones del signUp) como el login con Google: ahí no hay formulario,
+-- así que tomamos el nombre y la foto que Google ya nos da en el perfil de
+-- la cuenta (viene como "full_name"/"name" y "avatar_url").
 create or replace function public.manejar_nuevo_usuario()
 returns trigger
 language plpgsql
@@ -108,11 +120,16 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.perfiles (id, rol, nombre, apellido, email, telefono, instagram, categoria, genero, posicion, mano, telefono_visible)
+  insert into public.perfiles (id, rol, nombre, apellido, email, telefono, instagram, categoria, genero, posicion, mano, telefono_visible, foto_url)
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'rol', 'ALUMNO'),
-    coalesce(new.raw_user_meta_data->>'nombre', ''),
+    coalesce(
+      new.raw_user_meta_data->>'nombre',
+      new.raw_user_meta_data->>'full_name',
+      new.raw_user_meta_data->>'name',
+      ''
+    ),
     new.raw_user_meta_data->>'apellido',
     new.email,
     new.raw_user_meta_data->>'telefono',
@@ -121,7 +138,8 @@ begin
     coalesce(new.raw_user_meta_data->>'genero', 'Caballero'),
     coalesce(new.raw_user_meta_data->>'posicion', 'Drive'),
     coalesce(new.raw_user_meta_data->>'mano', 'Derecha'),
-    coalesce((new.raw_user_meta_data->>'telefono_visible')::boolean, true)
+    coalesce((new.raw_user_meta_data->>'telefono_visible')::boolean, true),
+    new.raw_user_meta_data->>'avatar_url'
   )
   on conflict (id) do nothing;
   return new;
