@@ -50,9 +50,13 @@ create policy "perfiles_select_staff" on public.perfiles
 
 -- Cualquier usuario logueado puede ver los datos básicos de los profesores
 -- (los necesita para reservar clases y ver quién da cada clase).
+-- OJO: sin "to authenticated" esta política corría para CUALQUIERA,
+-- incluso sin iniciar sesión (rol='PROFESOR' no depende de quién pregunta).
+-- Eso dejaba el nombre/email/teléfono/instagram del profesor expuestos en
+-- la API pública sin login. Se corrige acotándola a usuarios logueados.
 drop policy if exists "perfiles_select_profesores" on public.perfiles;
 create policy "perfiles_select_profesores" on public.perfiles
-  for select using (rol = 'PROFESOR');
+  for select to authenticated using (rol = 'PROFESOR');
 
 drop policy if exists "perfiles_update_propio" on public.perfiles;
 create policy "perfiles_update_propio" on public.perfiles
@@ -584,13 +588,64 @@ insert into storage.buckets (id, name, public)
 values ('comprobantes', 'comprobantes', false)
 on conflict (id) do nothing;
 
+-- Antes cualquier usuario autenticado podía leer o listar CUALQUIER
+-- comprobante del club (el de cualquier alumno, de cualquier profesor):
+-- la política solo miraba el bucket, no el dueño del archivo. Esto lo
+-- corrige: cada archivo vive en "reservas/<id-reserva>/..." o
+-- "rendiciones/<id-rendicion>/...", y solo puede leerlo/subirlo el dueño
+-- de esa reserva o rendición, o el profesor/admin (que sí necesitan ver
+-- los comprobantes de sus alumnos y del club).
 drop policy if exists "comprobantes_insert_autenticados" on storage.objects;
-create policy "comprobantes_insert_autenticados" on storage.objects
-  for insert to authenticated with check (bucket_id = 'comprobantes');
-
 drop policy if exists "comprobantes_select_autenticados" on storage.objects;
-create policy "comprobantes_select_autenticados" on storage.objects
-  for select to authenticated using (bucket_id = 'comprobantes');
+drop policy if exists "comprobantes_select_propio_o_staff" on storage.objects;
+create policy "comprobantes_select_propio_o_staff" on storage.objects
+  for select to authenticated using (
+    bucket_id = 'comprobantes'
+    and (
+      public.rol_actual() in ('PROFESOR','ADMIN')
+      or (
+        (storage.foldername(name))[1] = 'reservas'
+        and exists (
+          select 1 from public.reservas
+          where id::text = (storage.foldername(name))[2]
+            and alumno_id = auth.uid()
+        )
+      )
+      or (
+        (storage.foldername(name))[1] = 'rendiciones'
+        and exists (
+          select 1 from public.rendiciones
+          where id::text = (storage.foldername(name))[2]
+            and profesor_id = auth.uid()
+        )
+      )
+    )
+  );
+
+drop policy if exists "comprobantes_insert_propio_o_staff" on storage.objects;
+create policy "comprobantes_insert_propio_o_staff" on storage.objects
+  for insert to authenticated with check (
+    bucket_id = 'comprobantes'
+    and (
+      public.rol_actual() in ('PROFESOR','ADMIN')
+      or (
+        (storage.foldername(name))[1] = 'reservas'
+        and exists (
+          select 1 from public.reservas
+          where id::text = (storage.foldername(name))[2]
+            and alumno_id = auth.uid()
+        )
+      )
+      or (
+        (storage.foldername(name))[1] = 'rendiciones'
+        and exists (
+          select 1 from public.rendiciones
+          where id::text = (storage.foldername(name))[2]
+            and profesor_id = auth.uid()
+        )
+      )
+    )
+  );
 
 -- ---------------------------------------------------------
 -- STORAGE: fotos de perfil (bucket público, son de baja sensibilidad y así
@@ -600,13 +655,25 @@ insert into storage.buckets (id, name, public)
 values ('fotos', 'fotos', true)
 on conflict (id) do nothing;
 
+-- Antes cualquier usuario autenticado podía subir o PISAR la foto de
+-- perfil de cualquier otro (la política solo miraba el bucket, no la
+-- carpeta). Cada foto vive en "<id-del-usuario>/foto-...", así que ahora
+-- solo el dueño de esa carpeta (o el admin) puede escribir ahí.
 drop policy if exists "fotos_insert_autenticados" on storage.objects;
-create policy "fotos_insert_autenticados" on storage.objects
-  for insert to authenticated with check (bucket_id = 'fotos');
+drop policy if exists "fotos_insert_propio" on storage.objects;
+create policy "fotos_insert_propio" on storage.objects
+  for insert to authenticated with check (
+    bucket_id = 'fotos'
+    and ((storage.foldername(name))[1] = auth.uid()::text or public.rol_actual() = 'ADMIN')
+  );
 
 drop policy if exists "fotos_update_autenticados" on storage.objects;
-create policy "fotos_update_autenticados" on storage.objects
-  for update to authenticated using (bucket_id = 'fotos');
+drop policy if exists "fotos_update_propio" on storage.objects;
+create policy "fotos_update_propio" on storage.objects
+  for update to authenticated using (
+    bucket_id = 'fotos'
+    and ((storage.foldername(name))[1] = auth.uid()::text or public.rol_actual() = 'ADMIN')
+  );
 
 drop policy if exists "fotos_select_publico" on storage.objects;
 create policy "fotos_select_publico" on storage.objects
