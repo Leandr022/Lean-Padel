@@ -18,6 +18,7 @@ import PanelAdmin from "./paginas/admin/PanelAdmin.jsx";
 import RendicionesAdmin from "./paginas/admin/RendicionesAdmin.jsx";
 import EstadisticasAdmin from "./paginas/admin/EstadisticasAdmin.jsx";
 import ConfiguracionAdmin from "./paginas/admin/ConfiguracionAdmin.jsx";
+import GestionUsuariosAdmin from "./paginas/admin/GestionUsuariosAdmin.jsx";
 
 export default function App() {
   if (!supabaseConfigurado) return <AvisoConfiguracion />;
@@ -44,6 +45,7 @@ export default function App() {
       <Route path="/admin/rendiciones" element={<RutaProtegida roles={["ADMIN"]}><RendicionesAdmin /></RutaProtegida>} />
       <Route path="/admin/estadisticas" element={<RutaProtegida roles={["ADMIN"]}><EstadisticasAdmin /></RutaProtegida>} />
       <Route path="/admin/configuracion" element={<RutaProtegida roles={["ADMIN"]}><ConfiguracionAdmin /></RutaProtegida>} />
+      <Route path="/admin/usuarios" element={<RutaProtegida roles={["ADMIN"]}><GestionUsuariosAdmin /></RutaProtegida>} />
     </Routes>
   );
 }

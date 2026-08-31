@@ -21,6 +21,10 @@ export default function PanelAdmin() {
         <TarjetaEstadistica titulo="Clases del mes" valor={datos ? datos.clasesDelMes : "…"} />
       </section>
       <section className="dashboard-grid">
+        <Link className="dashboard-card verde" to="/profesor/calendario"><Icono nombre="calendario" /><span>Calendario</span></Link>
+        <Link className="dashboard-card azul" to="/profesor/alumnos"><Icono nombre="alumnos" /><span>Alumnos</span></Link>
+        <Link className="dashboard-card naranja" to="/profesor/comisiones"><Icono nombre="comisiones" /><span>Comisiones club</span></Link>
+        <Link className="dashboard-card violeta" to="/admin/usuarios"><Icono nombre="alumnos" /><span>Usuarios</span></Link>
         <Link className="dashboard-card verde" to="/admin/rendiciones"><Icono nombre="rendiciones" /><span>Rendiciones</span></Link>
         <Link className="dashboard-card azul" to="/admin/estadisticas"><Icono nombre="estadisticas" /><span>Estadísticas</span></Link>
         <Link className="dashboard-card naranja" to="/admin/configuracion"><Icono nombre="configuracion" /><span>Configuración</span></Link>

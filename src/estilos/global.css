@@ -522,6 +522,13 @@ textarea {
   margin: 0;
 }
 
+.topbar-derecha {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
 .usuario-chip {
   display: flex;
   align-items: center;
@@ -532,6 +539,40 @@ textarea {
   border-radius: 999px;
   font-weight: 600;
   white-space: nowrap;
+  min-width: 0;
+}
+
+.usuario-nombre {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.boton-salir-movil {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 92, 92, 0.25);
+  background: rgba(255, 92, 92, 0.1);
+  color: #ffb4b4;
+  cursor: pointer;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.boton-salir-movil:hover {
+  border-color: var(--rojo);
+  box-shadow: 0 8px 18px rgba(255, 92, 92, 0.16);
+}
+
+/* Barra de navegación fija para pantallas chicas; reutiliza los mismos
+   enlaces que la sidebar de escritorio pero en formato de tabs abajo. Se
+   mantiene oculta salvo en el breakpoint mobile de más abajo. */
+.nav-movil {
+  display: none;
 }
 
 /* --- Tarjetas base ------------------------------------------------------ */
@@ -1137,18 +1178,77 @@ textarea {
 
 /* --- Responsive ------------------------------------------------------- */
 
+/* Tablets / celulares en horizontal (~iPad chico para abajo): la sidebar de
+   escritorio se reemplaza por la barra de tabs de abajo (.nav-movil) y el
+   botón de cerrar sesión se muda al ícono compacto de la topbar. */
 @media (max-width: 900px) {
   .app-shell {
     grid-template-columns: 1fr;
   }
 
   .sidebar {
-    position: static;
-    height: auto;
+    display: none;
+  }
+
+  .contenido {
+    padding: 20px 18px calc(88px + env(safe-area-inset-bottom));
+  }
+
+  .nav-movil {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 60;
+    gap: 2px;
+    background: linear-gradient(180deg, rgba(9, 20, 34, 0.97), rgba(6, 14, 24, 0.99));
+    border-top: 1px solid rgba(46, 168, 255, 0.16);
+    padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
+    backdrop-filter: blur(6px);
+  }
+
+  .nav-movil a {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 6px 2px;
+    border-radius: 12px;
+    color: var(--muted);
+    font-size: 10.5px;
+    font-weight: 700;
+    text-align: center;
+  }
+
+  .nav-movil a span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+
+  .nav-movil a svg {
+    opacity: 0.75;
+  }
+
+  .nav-movil a.active {
+    color: var(--verde);
+    background: rgba(200, 255, 61, 0.1);
+  }
+
+  .nav-movil a.active svg {
+    opacity: 1;
+  }
+
+  .boton-salir-movil {
+    display: inline-flex;
   }
 
   .calendario-grid {
-    grid-template-columns: 64px repeat(6, 170px);
+    grid-template-columns: 60px repeat(6, minmax(110px, 1fr));
   }
 
   .dos-columnas,
@@ -1160,15 +1260,16 @@ textarea {
 
   .topbar {
     flex-direction: column;
+    align-items: stretch;
+  }
+
+  .topbar-derecha {
+    justify-content: space-between;
   }
 
   .role-selector,
   .opciones-dos {
     grid-template-columns: 1fr;
-  }
-
-  .contenido {
-    padding: 20px;
   }
 
   .login-card {
@@ -1191,5 +1292,106 @@ textarea {
   .calendario-acciones {
     flex-direction: column;
     align-items: stretch;
+  }
+}
+
+/* Celulares angostos: ajustes finos de tipografía, padding y grillas para
+   que nada se corte ni obligue a hacer zoom. */
+@media (max-width: 560px) {
+  .contenido {
+    padding: 16px 14px calc(84px + env(safe-area-inset-bottom));
+  }
+
+  .topbar h1 {
+    font-size: 24px;
+  }
+
+  .login-page {
+    padding: 16px;
+  }
+
+  .login-card,
+  .registro-card {
+    padding: 18px;
+    border-radius: 22px;
+  }
+
+  .login-card h1 {
+    font-size: 28px;
+  }
+
+  .brand-badge {
+    width: 60px;
+    height: 60px;
+    font-size: 22px;
+    border-radius: 18px;
+  }
+
+  .modal {
+    padding: 18px;
+    border-radius: 20px;
+  }
+
+  .cerrar {
+    top: 10px;
+    right: 10px;
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+  }
+
+  .stat-card,
+  .dashboard-card,
+  .form-card,
+  .tabla-card,
+  .calendario-card,
+  .planilla-card,
+  .info-clase,
+  .lista-card,
+  .detalle-card {
+    padding: 16px;
+    border-radius: 18px;
+  }
+
+  .stats-grid,
+  .dashboard-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .dashboard-card {
+    min-height: 108px;
+    font-size: 15px;
+  }
+
+  .stat-card strong {
+    font-size: 24px;
+  }
+
+  .perfil-header {
+    flex-wrap: wrap;
+  }
+
+  .usuario-chip {
+    max-width: 150px;
+    padding: 7px 12px 7px 7px;
+  }
+
+  .usuario-nombre {
+    max-width: 90px;
+  }
+
+  .calendario-grid {
+    grid-template-columns: 48px repeat(6, 92px);
+  }
+
+  .acciones-modal {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .acciones-modal .boton-principal,
+  .acciones-modal .boton-secundario,
+  .acciones-modal .boton-peligro {
+    width: 100%;
   }
 }

@@ -88,6 +88,10 @@ create policy "perfiles_update_staff" on public.perfiles
 -- propia fila (la política de arriba solo mira que sea SU fila, no qué
 -- columnas cambia). Este trigger blindas "rol" y "activo": solo un ADMIN
 -- puede modificarlas, sin importar qué mande el resto de los updates.
+-- Usa "is distinct from" (no "<>") a propósito: en SQL, "x <> 'ADMIN'" da
+-- NULL (no TRUE) cuando x es NULL, así que el "if" no se disparaba y la fila
+-- pasaba sin revertir. Con "is distinct from" ese caso también queda
+-- bloqueado por defecto.
 create or replace function public.proteger_columnas_perfil()
 returns trigger
 language plpgsql
@@ -95,7 +99,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if public.rol_actual() <> 'ADMIN' then
+  if public.rol_actual() is distinct from 'ADMIN' then
     new.rol := old.rol;
     new.activo := old.activo;
   end if;
@@ -699,10 +703,13 @@ create policy "fotos_select_publico" on storage.objects
 
 -- =========================================================
 -- Fin del esquema.
--- Para crear tu usuario PROFESOR o ADMIN (no se registran desde la
--- app pública, es una acción manual tuya por seguridad):
---   1) Supabase → Authentication → Users → Add user (email + contraseña)
---   2) Corré esto reemplazando el email:
---      update public.perfiles set rol = 'PROFESOR', nombre = 'Leandro Santagada'
---      where email = 'profesor@tudominio.com';
+-- Cuentas de PROFESOR y ADMIN no se registran desde la app pública (esa
+-- pantalla solo crea alumnos, a propósito, por seguridad):
+--   - Un ADMIN ya puede crear cuentas de profesor directamente desde la app
+--     (Panel → Usuarios → "Crear cuenta de profesor").
+--   - El primer ADMIN del club, en cambio, es manual:
+--       1) Supabase → Authentication → Users → Add user (email + contraseña)
+--       2) Corré esto reemplazando el email:
+--          update public.perfiles set rol = 'ADMIN', nombre = 'Tu nombre'
+--          where email = 'admin@tudominio.com';
 -- =========================================================

@@ -105,37 +105,9 @@ mano:
    eligiendo el rol correspondiente en el login... en la práctica, usá dos
    emails distintos, uno por rol).
 
-## 2) Crear las credenciales de Mercado Pago
 
-1. Entrá a [mercadopago.com.ar/developers](https://www.mercadopago.com.ar/developers/panel)
-   con tu cuenta de Mercado Pago (o creá una).
-2. Creá una aplicación y copiá, de **Credenciales de producción** (o de
-   prueba mientras testeás):
-   - `Access Token` → va en `MERCADOPAGO_ACCESS_TOKEN` (secreto, solo en el
-     servidor)
-   - `Public Key` → va en `VITE_MERCADOPAGO_PUBLIC_KEY`
 
-## 3) Configurar el envío de mails (SMTP propio)
 
-El servicio de mails que trae Supabase por defecto es solo para pruebas: no
-manda mails a nadie fuera de tu organización de Supabase y tiene un límite
-de 2 por hora. Para que los alumnos reciban de verdad el mail de
-confirmación al registrarse, hace falta conectar un proveedor de mail
-propio:
-
-1. Creá una cuenta gratis en [Brevo](https://www.brevo.com) (u otro de la
-   lista que ofrece Supabase: Resend, Postmark, SendGrid, AWS SES, ZeptoMail).
-2. En Brevo, verificá como "remitente" el email desde el que van a salir los
-   mails (por ejemplo el email del club) — te manda un mail de confirmación,
-   lo confirmás con un click. No hace falta tener un dominio propio para
-   esto.
-3. Buscá tus credenciales SMTP (usualmente en **SMTP & API**): host, puerto,
-   usuario y una contraseña/clave SMTP (distinta a tu contraseña de Brevo).
-4. En Supabase, andá a **Authentication → Settings** (sección SMTP) y
-   activá "Enable Custom SMTP", cargando esos datos más el email verificado
-   como remitente y el nombre que querés que aparezca.
-5. Probá registrando una cuenta nueva con un email real: el mail debería
-   llegar en segundos.
 
 ## 4) Activar el aviso por WhatsApp de nuevas reservas
 
