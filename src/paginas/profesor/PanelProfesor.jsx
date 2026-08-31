@@ -26,6 +26,7 @@ export default function PanelProfesor() {
         <TarjetaEstadistica titulo="Clases del mes" valor={datos ? datos.clasesDelMes : "…"} />
         <TarjetaEstadistica titulo="Facturado (mes)" valor={datos ? formatearMoneda(datos.facturado) : "…"} />
         <TarjetaEstadistica titulo="A rendir club (mes)" valor={datos ? formatearMoneda(datos.aRendir) : "…"} />
+        <TarjetaEstadistica titulo="Ganancia real (mes)" valor={datos ? formatearMoneda(datos.ganancia) : "…"} />
       </section>
       <section className="dashboard-grid">
         <Link className="dashboard-card verde" to="/profesor/calendario"><Icono nombre="calendario" /><span>Calendario</span></Link>

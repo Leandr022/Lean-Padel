@@ -62,6 +62,19 @@ export function esPasado(fecha, hora) {
   return fechaHora.getTime() < Date.now();
 }
 
+// Política del club: un alumno puede cancelar su clase sin cargo solo si
+// faltan 12 horas o más para el horario. Con menos, se queda debiendo la
+// clase (el trigger impedir_cancelacion_tardia en la base hace cumplir
+// esto de verdad; esto es solo para no mostrarle el botón de cancelar
+// cuando ya sabemos que el servidor lo va a rechazar).
+export function sePuedeCancelar(fecha, hora, horasMinimo = 12) {
+  const [h, m] = hora.split(":").map(Number);
+  const fechaHora = new Date(fecha);
+  fechaHora.setHours(h, m, 0, 0);
+  const horasRestantes = (fechaHora.getTime() - Date.now()) / (1000 * 60 * 60);
+  return horasRestantes >= horasMinimo;
+}
+
 /** Rango [lunes, sábado] de una semana, como claves yyyy-mm-dd, para consultar Supabase. */
 export function rangoSemana(offsetSemanas = 0) {
   const semana = obtenerSemana(offsetSemanas);

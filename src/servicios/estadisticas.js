@@ -69,17 +69,19 @@ export async function estadisticasProfesor(profesorId, comisiones) {
 
   let facturado = 0;
   let aRendir = 0;
+  let ganancia = 0;
   clasesDelMes.forEach((clase) => {
     const pagadas = (clase.reservas || []).filter((r) => r.pagado);
     const total = pagadas.reduce((acc, r) => acc + Number(r.monto), 0);
     facturado += total;
     if (total > 0) {
-      const { comision } = calcularComision(total, clase.reservas.length, comisiones || {});
+      const { comision, gananciaProfesor } = calcularComision(total, clase.reservas.length, comisiones || {});
       aRendir += comision;
+      ganancia += gananciaProfesor;
     }
   });
 
-  return { clasesHoy, clasesDelMes: clasesDelMes.length, facturado, aRendir };
+  return { clasesHoy, clasesDelMes: clasesDelMes.length, facturado, aRendir, ganancia };
 }
 
 /** Panel y estadísticas del admin: agregados de todo el club. */

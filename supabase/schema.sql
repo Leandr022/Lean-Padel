@@ -155,6 +155,44 @@ drop policy if exists "configuracion_update_admin" on public.configuracion;
 create policy "configuracion_update_admin" on public.configuracion
   for update using (public.rol_actual() = 'ADMIN');
 
+-- El profesor tiene que poder ajustar el % de comisión del club sin
+-- necesitar entrar como admin. El trigger de más abajo
+-- (proteger_columnas_configuracion) se asegura de que, aunque tenga este
+-- permiso, no pueda tocar precios, descuentos, IPC ni el período de
+-- rendición por esta vía — eso sigue siendo solo de ADMIN.
+drop policy if exists "configuracion_update_profesor" on public.configuracion;
+create policy "configuracion_update_profesor" on public.configuracion
+  for update using (public.rol_actual() in ('PROFESOR','ADMIN'));
+
+-- Mismo patrón que proteger_columnas_perfil: RLS es a nivel de fila, no de
+-- columna, así que sin esto un profesor podría mandar un update tocando
+-- precio_individual, ipc, etc. aunque el formulario del frontend nunca se
+-- lo ofrezca. Si no es ADMIN, este trigger devuelve todas las columnas
+-- menos "comisiones" a su valor anterior.
+create or replace function public.proteger_columnas_configuracion()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if public.rol_actual() <> 'ADMIN' then
+    new.precio_individual := old.precio_individual;
+    new.precio_grupal := old.precio_grupal;
+    new.descuento_abono_individual := old.descuento_abono_individual;
+    new.descuento_abono_grupal := old.descuento_abono_grupal;
+    new.ipc := old.ipc;
+    new.rendicion_default := old.rendicion_default;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trigger_proteger_columnas_configuracion on public.configuracion;
+create trigger trigger_proteger_columnas_configuracion
+  before update on public.configuracion
+  for each row execute function public.proteger_columnas_configuracion();
+
 -- ---------------------------------------------------------
 -- CLASES (turnos del calendario, con fecha real)
 -- ---------------------------------------------------------
@@ -264,6 +302,39 @@ create policy "reservas_delete_propias" on public.reservas
 drop policy if exists "reservas_delete_staff" on public.reservas;
 create policy "reservas_delete_staff" on public.reservas
   for delete using (public.rol_actual() in ('PROFESOR','ADMIN'));
+
+-- Política de cancelación tardía: un alumno no puede cancelar (borrar) su
+-- propia reserva si faltan menos de 12 horas para el inicio de la clase —
+-- a esa altura el profesor ya perdió la chance de ocupar ese horario con
+-- otro alumno. El profesor/admin sigue pudiendo cancelar cuando quiera
+-- (para excepciones, lesiones, etc. — la política reservas_delete_staff de
+-- arriba no se toca). Corre con permisos de servidor así que un alumno no
+-- puede saltearse esto llamando a la API directamente.
+create or replace function public.impedir_cancelacion_tardia()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_inicio timestamp;
+begin
+  if public.rol_actual() in ('PROFESOR','ADMIN') then
+    return old;
+  end if;
+  select (fecha || ' ' || hora)::timestamp into v_inicio
+  from public.clases where id = old.clase_id;
+  if v_inicio is not null and v_inicio - now() < interval '12 hours' then
+    raise exception 'No podés cancelar esta clase: faltan menos de 12 horas para el horario. Si no podés asistir, avisale directamente al profesor.';
+  end if;
+  return old;
+end;
+$$;
+
+drop trigger if exists trigger_impedir_cancelacion_tardia on public.reservas;
+create trigger trigger_impedir_cancelacion_tardia
+  before delete on public.reservas
+  for each row execute function public.impedir_cancelacion_tardia();
 
 -- Reglas de integridad: al insertar una reserva, valida cupo/tipo y marca
 -- la clase como "reservada". Como ahora la grilla es de 30 minutos y una

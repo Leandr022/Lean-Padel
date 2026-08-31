@@ -19,6 +19,10 @@ serverless).
   para clases Individuales y Grupales, los horarios son los mismos.
 - Reserva de clase Individual o Grupal (cupo de 4), con pago por Mercado
   Pago, transferencia (con comprobante) o efectivo.
+- Cancelación con tope de 12 horas: el alumno puede cancelar su reserva sin
+  problema si falta más de 12hs para la clase; si falta menos, el botón de
+  cancelar se oculta y queda bloqueado también del lado del servidor (el
+  profesor/admin sí puede cancelar en cualquier momento, para excepciones).
 - Panel del profesor: crear/bloquear horarios, anotar alumnos a mano, marcar
   pagos, cambiar estado de la clase.
 - Herramientas de horarios del profesor: abrir la agenda semana por semana,
@@ -33,7 +37,13 @@ serverless).
   su ficha, además de completar la planilla técnica.
 - Planilla técnica por alumno con seguimiento golpe a golpe (la completa el
   profesor; el alumno la ve en modo lectura).
+- Aviso automático por WhatsApp al profesor cada vez que un alumno reserva
+  una clase (vía CallMeBot, ver sección más abajo).
 - Comisiones y rendiciones al club, con aviso de pago y confirmación admin.
+  El profesor puede cargar el % de comisión que le fija el club (según la
+  cantidad de alumnos por clase) desde su propia pantalla de "Comisiones",
+  y ve automáticamente cuánto factura, cuánto debe rendir y cuál es su
+  ganancia real del mes — sin tener que calcularlo a mano.
 - Estadísticas del club (alumnos activos, horarios más pedidos, etc.).
 - Aumento de precios por IPC: el admin carga el % del mes y lo aplica con un
   botón aparte (sube individual y grupal ese %, no es automático).
@@ -96,12 +106,63 @@ mano:
      servidor)
    - `Public Key` → va en `VITE_MERCADOPAGO_PUBLIC_KEY`
 
-## 3) Configurar las variables de entorno
+## 3) Configurar el envío de mails (SMTP propio)
 
-Copiá `.env.example` a `.env.local` y completá los valores de los pasos 1 y
-2. `VITE_SITE_URL` en desarrollo queda como `http://localhost:5173`.
+El servicio de mails que trae Supabase por defecto es solo para pruebas: no
+manda mails a nadie fuera de tu organización de Supabase y tiene un límite
+de 2 por hora. Para que los alumnos reciban de verdad el mail de
+confirmación al registrarse, hace falta conectar un proveedor de mail
+propio:
 
-## 4) Correr en local
+1. Creá una cuenta gratis en [Brevo](https://www.brevo.com) (u otro de la
+   lista que ofrece Supabase: Resend, Postmark, SendGrid, AWS SES, ZeptoMail).
+2. En Brevo, verificá como "remitente" el email desde el que van a salir los
+   mails (por ejemplo el email del club) — te manda un mail de confirmación,
+   lo confirmás con un click. No hace falta tener un dominio propio para
+   esto.
+3. Buscá tus credenciales SMTP (usualmente en **SMTP & API**): host, puerto,
+   usuario y una contraseña/clave SMTP (distinta a tu contraseña de Brevo).
+4. En Supabase, andá a **Authentication → Settings** (sección SMTP) y
+   activá "Enable Custom SMTP", cargando esos datos más el email verificado
+   como remitente y el nombre que querés que aparezca.
+5. Probá registrando una cuenta nueva con un email real: el mail debería
+   llegar en segundos.
+
+## 4) Activar el aviso por WhatsApp de nuevas reservas
+
+Cada vez que un alumno reserva una clase, la app le puede mandar un
+WhatsApp al profesor con los datos (alumno, fecha, tipo de clase, si ya
+está pagada). Usa [CallMeBot](https://www.callmebot.com), un servicio
+gratuito pensado para avisos personales — no reemplaza una integración
+oficial de WhatsApp Business si en algún momento se necesita mandarles
+mensajes a los alumnos, pero alcanza de sobra para este aviso.
+
+1. Agendá en tu WhatsApp el número **+34 623 78 95 80** y mandale el
+   mensaje exacto: `I allow callmebot to send me messages`.
+2. En un par de minutos te responde con una **clave (apikey)**. Guardala.
+3. Cargá en las variables de entorno (`.env.local` y en Vercel):
+   - `CALLMEBOT_PHONE`: tu número con código de país, sin `+` ni espacios
+     (ej: `5492611234567`).
+   - `CALLMEBOT_APIKEY`: la clave que te mandó el bot.
+   - `NOTIFICACIONES_WEBHOOK_SECRET`: inventate cualquier texto largo y
+     random — es para que nadie más pueda activar este aviso desde afuera.
+4. En Supabase, andá a **Database → Webhooks → Create a new hook**:
+   - Tabla: `reservas`.
+   - Evento: `Insert`.
+   - Tipo: `HTTP Request`, método `POST`.
+   - URL: `https://tu-app.vercel.app/api/notificar-reserva` (con tu dominio
+     real).
+   - En **HTTP Headers**, agregá uno con key `x-webhook-secret` y como
+     valor el mismo texto que pusiste en `NOTIFICACIONES_WEBHOOK_SECRET`.
+5. Guardá, y probá reservando una clase de prueba: te debería llegar el
+   WhatsApp al toque.
+
+## 5) Configurar las variables de entorno
+
+Copiá `.env.example` a `.env.local` y completá los valores de los pasos 1,
+2, 3 y 4. `VITE_SITE_URL` en desarrollo queda como `http://localhost:5173`.
+
+## 6) Correr en local
 
 ```bash
 npm install
@@ -113,7 +174,7 @@ pública), así que el pago online solo se puede probar una vez desplegado en
 Vercel. En local podés probar el resto del flujo (transferencia, efectivo,
 calendario, planilla técnica, etc.) sin problema.
 
-## 5) Publicar en Vercel
+## 7) Publicar en Vercel
 
 1. Subí este proyecto a un repositorio de GitHub.
 2. Entrá a [vercel.com](https://vercel.com), creá una cuenta (podés usar tu
@@ -194,3 +255,20 @@ El profesor puede corregir el perfil de sus alumnos (política
 bloqueando que, aunque tenga ese permiso, cambie el `rol` o el `activo` de
 alguien: eso sigue siendo exclusivo del admin. Esto se probó explícitamente
 contra una base Postgres local antes de entregarlo.
+
+El profesor puede editar `configuracion.comisiones` (política
+`configuracion_update_profesor`), pero un trigger
+(`proteger_columnas_configuracion`) restaura cualquier otro campo de esa
+tabla a su valor anterior si quien edita no es admin, así que no puede usar
+ese permiso para tocar precios, descuentos, IPC ni el período de rendición
+por defecto — eso sigue siendo exclusivo del admin.
+
+La cancelación con menos de 12 horas no depende solo de que el botón esté
+oculto en la pantalla: un trigger (`impedir_cancelacion_tardia`) rechaza el
+borrado de la reserva directamente en la base de datos si faltan menos de
+12hs, salvo que quien cancele sea el profesor o el admin. Así, aunque
+alguien intente cancelar llamando a la API directamente (saltándose la
+pantalla), la regla se sigue cumpliendo. Ambas reglas se probaron
+explícitamente contra una base Postgres local (permisos cruzados entre
+Alumno/Profesor/Admin y los dos casos límite de la cancelación) antes de
+entregarlas.

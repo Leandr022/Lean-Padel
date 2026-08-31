@@ -863,6 +863,14 @@ textarea {
   grid-column: 1 / -1;
 }
 
+.aviso-cancelacion {
+  font-size: 0.8rem;
+  color: var(--naranja);
+  max-width: 160px;
+  text-align: right;
+  line-height: 1.3;
+}
+
 .ok {
   color: #65ffb1;
 }

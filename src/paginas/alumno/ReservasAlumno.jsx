@@ -6,7 +6,7 @@ import usarAutenticacion from "../../ganchos/usarAutenticacion.js";
 import { obtenerConfiguracion } from "../../servicios/configuracion.js";
 import { listarClasesRango } from "../../servicios/clases.js";
 import { cancelarReserva, listarProximasReservas } from "../../servicios/reservas.js";
-import { obtenerSemana, rangoSemana, formatearLargo } from "../../utilidades/fechas.js";
+import { obtenerSemana, rangoSemana, formatearLargo, sePuedeCancelar } from "../../utilidades/fechas.js";
 
 export default function ReservasAlumno() {
   const { usuario } = usarAutenticacion();
@@ -64,8 +64,12 @@ export default function ReservasAlumno() {
     try {
       await cancelarReserva(id);
       refrescarTodo();
-    } catch {
-      setError("No se pudo cancelar la reserva. Probá de nuevo.");
+    } catch (err) {
+      // El trigger de la base (impedir_cancelacion_tardia) puede rechazar
+      // esto igual aunque el botón ya esté oculto por las dudas (por
+      // ejemplo si pasaron los minutos justos mientras tenía la pantalla
+      // abierta) — le mostramos el motivo real que manda la base.
+      setError(err?.message || "No se pudo cancelar la reserva. Probá de nuevo.");
     }
   }
 
@@ -76,13 +80,22 @@ export default function ReservasAlumno() {
       {proximas.length > 0 && (
         <section className="tabla-card aviso-pagina">
           <h2>Mis próximas clases</h2>
-          {proximas.map((r) => (
-            <div className="fila-alumno" key={r.id}>
-              <span>{formatearLargo(new Date(`${r.clases.fecha}T00:00:00`))} · {r.clases.hora}</span>
-              <strong className={r.pagado ? "ok" : "pendiente"}>{r.tipo} · {r.pagado ? "Abonado" : "Pago pendiente"}</strong>
-              <button type="button" className="boton-secundario" onClick={() => cancelar(r.id)}>Cancelar</button>
-            </div>
-          ))}
+          {proximas.map((r) => {
+            const puedeCancelar = sePuedeCancelar(r.clases.fecha, r.clases.hora);
+            return (
+              <div className="fila-alumno" key={r.id}>
+                <span>{formatearLargo(new Date(`${r.clases.fecha}T00:00:00`))} · {r.clases.hora}</span>
+                <strong className={r.pagado ? "ok" : "pendiente"}>{r.tipo} · {r.pagado ? "Abonado" : "Pago pendiente"}</strong>
+                {puedeCancelar ? (
+                  <button type="button" className="boton-secundario" onClick={() => cancelar(r.id)}>Cancelar</button>
+                ) : (
+                  <span className="texto-muted aviso-cancelacion" title="Faltan menos de 12 horas para esta clase. Si no podés venir, avisale directamente al profesor.">
+                    Ya no se puede cancelar (falta menos de 12hs)
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </section>
       )}
 
