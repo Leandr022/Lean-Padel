@@ -1206,11 +1206,22 @@ textarea {
     border-top: 1px solid rgba(46, 168, 255, 0.16);
     padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
     backdrop-filter: blur(6px);
+    /* El menú del ADMIN tiene más accesos que el de alumno/profesor (además
+       de los suyos, incluye los del profesor). En vez de achicar cada ítem
+       hasta hacerlo ilegible, con pocos ítems se reparten en todo el ancho
+       (flex-grow) y con muchos se activa scroll horizontal en vez de
+       apretujarlos. */
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .nav-movil::-webkit-scrollbar {
+    display: none;
   }
 
   .nav-movil a {
-    flex: 1;
-    min-width: 0;
+    flex: 1 0 64px;
+    min-width: 64px;
     display: flex;
     flex-direction: column;
     align-items: center;

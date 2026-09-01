@@ -16,12 +16,22 @@ const enlaces = {
     ["/profesor/comisiones", "Comisiones club", "comisiones"],
     ["/profesor/configuracion", "Configuración", "configuracion"],
   ],
+  // El ADMIN también puede entrar a las pantallas de PROFESOR (ver
+  // RutaProtegida), así que su menú incluye ambos grupos — si no, al entrar
+  // a "Calendario" o "Alumnos" el menú no resaltaba nada y no había forma de
+  // volver a esas pantallas sin pasar antes por el Panel. Se distinguen los
+  // dos "Configuración" (el del profesor y el de precios del club) con
+  // etiquetas distintas para que no se confundan estando uno al lado del otro.
   ADMIN: [
     ["/admin", "Panel", "inicio"],
+    ["/profesor/calendario", "Calendario", "calendario"],
+    ["/profesor/alumnos", "Alumnos", "alumnos"],
+    ["/profesor/comisiones", "Comisiones club", "comisiones"],
     ["/admin/usuarios", "Usuarios", "alumnos"],
     ["/admin/rendiciones", "Rendiciones", "rendiciones"],
     ["/admin/estadisticas", "Estadísticas", "estadisticas"],
-    ["/admin/configuracion", "Configuración", "configuracion"],
+    ["/profesor/configuracion", "Mi cuenta", "configuracion"],
+    ["/admin/configuracion", "Precios y club", "configuracion"],
   ],
 };
 

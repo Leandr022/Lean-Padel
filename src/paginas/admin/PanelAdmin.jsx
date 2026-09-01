@@ -27,7 +27,8 @@ export default function PanelAdmin() {
         <Link className="dashboard-card violeta" to="/admin/usuarios"><Icono nombre="alumnos" /><span>Usuarios</span></Link>
         <Link className="dashboard-card verde" to="/admin/rendiciones"><Icono nombre="rendiciones" /><span>Rendiciones</span></Link>
         <Link className="dashboard-card azul" to="/admin/estadisticas"><Icono nombre="estadisticas" /><span>Estadísticas</span></Link>
-        <Link className="dashboard-card naranja" to="/admin/configuracion"><Icono nombre="configuracion" /><span>Configuración</span></Link>
+        <Link className="dashboard-card violeta" to="/profesor/configuracion"><Icono nombre="configuracion" /><span>Mi cuenta</span></Link>
+        <Link className="dashboard-card naranja" to="/admin/configuracion"><Icono nombre="configuracion" /><span>Precios y club</span></Link>
       </section>
     </LayoutPrincipal>
   );

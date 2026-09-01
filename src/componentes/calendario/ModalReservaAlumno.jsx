@@ -152,7 +152,7 @@ export default function ModalReservaAlumno({ info, precios, usuario, onCerrar, o
               <p>Horario: <strong>{rangoHorario(hora, duracionMinutos)}</strong></p>
               <p>Pago por clase: <strong>{formatearMoneda(precio)}</strong></p>
               <p>Abono mensual (4 clases): <strong>{formatearMoneda(abono)}</strong></p>
-              <small>Cancelación solo con más de 24 horas. Si cancelás con menos de 24 horas se retiene el total.</small>
+              <small>Podés cancelar sin problema hasta 12 horas antes de la clase. Con menos de 12 horas, la cancelación queda bloqueada.</small>
             </div>
 
             <label>Forma de pago</label>

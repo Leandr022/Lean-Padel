@@ -48,7 +48,10 @@ export async function crearProfesor({ nombre, email, password }) {
   const respuesta = await fetch("/api/admin-crear-usuario", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ nombre, email, password, rol: "PROFESOR" }),
+    // El endpoint siempre crea la cuenta como PROFESOR (no hace falta ni se
+    // usa un campo "rol" acá: para crear un ADMIN se promueve una cuenta ya
+    // existente desde la lista de abajo).
+    body: JSON.stringify({ nombre, email, password }),
   });
   const resultado = await respuesta.json().catch(() => ({}));
   if (!respuesta.ok) throw new Error(resultado.error || "No se pudo crear la cuenta.");

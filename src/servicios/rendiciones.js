@@ -8,10 +8,15 @@ export async function listarRendiciones({ profesorId } = {}) {
   return data;
 }
 
-export async function crearRendicion({ profesorId, periodo, desde, hasta, monto }) {
+// Ojo: esto NO marca el pago como confirmado. Queda "pendiente" a propósito
+// (metodo_informado solo registra lo que el profesor dice haber pagado) —
+// confirmar la recepción sigue siendo una acción del admin desde su panel,
+// tanto en la pantalla como del lado del servidor (ver trigger
+// proteger_columnas_rendicion).
+export async function crearRendicion({ profesorId, periodo, desde, hasta, monto, metodoInformado }) {
   const { data, error } = await supabase
     .from("rendiciones")
-    .insert({ profesor_id: profesorId, periodo, desde, hasta, monto })
+    .insert({ profesor_id: profesorId, periodo, desde, hasta, monto, metodo_informado: metodoInformado })
     .select()
     .single();
   if (error) throw error;

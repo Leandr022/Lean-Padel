@@ -3,3 +3,8 @@ dist
 .env
 .env.local
 .vercel
+
+# Notas privadas de configuración: no tienen que subirse al repo aunque
+# sea público (no tiene contraseñas, pero sí detalles internos que no son
+# para cualquiera).
+CONFIGURACION-PRIVADA.md

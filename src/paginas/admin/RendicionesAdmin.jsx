@@ -62,7 +62,7 @@ export default function RendicionesAdmin() {
           </p>
           <div className="estado-rendicion">
             <strong className={r.estado === "pendiente" ? "pendiente" : "ok"}>
-              {r.estado === "pendiente" ? "Pendiente de abono" : `Recibido por ${r.estado}`}
+              {r.estado === "pendiente" ? "Pendiente de confirmación" : `Recibido por ${r.estado}`}
             </strong>
             {r.estado === "pendiente" && (
               <>
@@ -71,6 +71,11 @@ export default function RendicionesAdmin() {
               </>
             )}
           </div>
+          {r.estado === "pendiente" && r.metodo_informado && (
+            <small className="texto-muted">
+              El profesor avisó que pagó por <strong>{r.metodo_informado}</strong> — confirmá arriba una vez que lo recibas.
+            </small>
+          )}
           <small>Al confirmar se guarda fecha y hora de la operación.</small>
         </section>
       ))}

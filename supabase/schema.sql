@@ -240,6 +240,8 @@ create table if not exists public.clases (
 );
 
 create index if not exists clases_fecha_idx on public.clases (fecha);
+create index if not exists clases_profesor_id_idx on public.clases (profesor_id);
+create index if not exists clases_continuacion_de_idx on public.clases (continuacion_de);
 
 -- Migración: grilla de 30 minutos con clases de 60 o 90 minutos. La clase
 -- "dueña" del turno (la que el alumno reservó primero) guarda en
@@ -371,6 +373,15 @@ create trigger trigger_impedir_cancelacion_tardia
 -- no cierra, aborta con una excepción y la fila nunca llega a guardarse).
 -- Corre con permisos de servidor así que un alumno no puede saltearse las
 -- reglas aunque manipule el pedido.
+--
+-- CRÍTICO: también recalcula "monto" acá, ignorando lo que mande el
+-- cliente. Antes el navegador calculaba el precio y lo mandaba tal cual en
+-- el insert, y nada del lado del servidor lo validaba (el trigger de
+-- columnas protegidas de "reservas" solo corre en UPDATE, no en INSERT) —
+-- cualquiera con la app abierta podía llamar a la API de Supabase directo y
+-- reservar una clase de $29000 mandando monto=1; Mercado Pago armaba un
+-- cobro real por ese monto trucho y quedaba "pagado" de verdad. Las fórmulas
+-- de acá tienen que reflejar exactamente las de src/utilidades/precios.js.
 create or replace function public.antes_insertar_reserva()
 returns trigger
 language plpgsql
@@ -390,9 +401,22 @@ declare
   v_estado_extra text;
   v_ids_extra uuid[] := '{}';
   i int;
+  v_precio_base numeric;
+  v_descuento numeric;
 begin
   if new.duracion_minutos not in (60, 90) then
     raise exception 'La duración de la clase tiene que ser 60 o 90 minutos.';
+  end if;
+
+  select case when new.tipo = 'Grupal' then precio_grupal else precio_individual end,
+         case when new.tipo = 'Grupal' then descuento_abono_grupal else descuento_abono_individual end
+    into v_precio_base, v_descuento
+    from public.configuracion where id = 1;
+
+  if new.forma_pago = 'abono' then
+    new.monto := round(v_precio_base * 4 * (new.duracion_minutos / 60.0) * (1 - v_descuento / 100.0));
+  else
+    new.monto := round(v_precio_base * (new.duracion_minutos / 60.0));
   end if;
 
   select fecha, hora, profesor_id, tipo, estado, duracion_minutos
@@ -578,8 +602,16 @@ create table if not exists public.rendiciones (
   estado text not null default 'pendiente' check (estado in ('pendiente','transferencia','efectivo')),
   comprobante_url text,
   pagado_en timestamptz,
-  creado_en timestamptz not null default now()
+  creado_en timestamptz not null default now(),
+  -- Lo que el profesor dice haber usado para pagar, informativo nada más:
+  -- no confirma el pago (eso lo hace el admin cambiando "estado", ver
+  -- trigger más abajo).
+  metodo_informado text check (metodo_informado in ('transferencia','efectivo'))
 );
+alter table public.rendiciones add column if not exists metodo_informado text
+  check (metodo_informado in ('transferencia','efectivo'));
+
+create index if not exists rendiciones_profesor_id_idx on public.rendiciones (profesor_id);
 
 alter table public.rendiciones enable row level security;
 
@@ -602,6 +634,38 @@ create policy "rendiciones_update_propias" on public.rendiciones
 drop policy if exists "rendiciones_all_admin" on public.rendiciones;
 create policy "rendiciones_all_admin" on public.rendiciones
   for all using (public.rol_actual() = 'ADMIN') with check (public.rol_actual() = 'ADMIN');
+
+-- El profesor "avisaba" un pago y el propio frontend lo marcaba enseguida
+-- como confirmado (estado='transferencia'/'efectivo'), sin que el admin
+-- hubiera hecho nada — y como la política de arriba no restringe columnas,
+-- un profesor podía lograr lo mismo llamando directo a la API, tanto al
+-- crear la rendición como al actualizarla después. Este trigger blinda
+-- "estado" y "pagado_en": solo un ADMIN puede tocarlos (confirmar un pago
+-- sigue siendo, siempre, una acción del admin desde su panel).
+create or replace function public.proteger_columnas_rendicion()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if public.rol_actual() is distinct from 'ADMIN' then
+    if TG_OP = 'UPDATE' then
+      new.estado := old.estado;
+      new.pagado_en := old.pagado_en;
+    else
+      new.estado := 'pendiente';
+      new.pagado_en := null;
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trigger_proteger_columnas_rendicion on public.rendiciones;
+create trigger trigger_proteger_columnas_rendicion
+  before insert or update on public.rendiciones
+  for each row execute function public.proteger_columnas_rendicion();
 
 -- ---------------------------------------------------------
 -- STORAGE: comprobantes de pago (transferencia / efectivo / rendición)

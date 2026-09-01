@@ -4,7 +4,7 @@ import TarjetaEstadistica from "../../componentes/ui/TarjetaEstadistica.jsx";
 import usarAutenticacion from "../../ganchos/usarAutenticacion.js";
 import { obtenerConfiguracion, actualizarConfiguracion } from "../../servicios/configuracion.js";
 import { estadisticasProfesor } from "../../servicios/estadisticas.js";
-import { crearRendicion, marcarRendicionPagada, subirComprobanteRendicion } from "../../servicios/rendiciones.js";
+import { crearRendicion, subirComprobanteRendicion } from "../../servicios/rendiciones.js";
 import { formatearMoneda } from "../../utilidades/precios.js";
 import { claveFecha } from "../../utilidades/fechas.js";
 
@@ -61,10 +61,16 @@ export default function ComisionesProfesor() {
       const hoy = new Date();
       const desde = claveFecha(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
       const hasta = claveFecha(new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0));
-      const rendicion = await crearRendicion({ profesorId: usuario.id, periodo: config.rendicionDefault, desde, hasta, monto: datos.aRendir });
-      await marcarRendicionPagada(rendicion.id, metodo);
+      const rendicion = await crearRendicion({
+        profesorId: usuario.id,
+        periodo: config.rendicionDefault,
+        desde,
+        hasta,
+        monto: datos.aRendir,
+        metodoInformado: metodo,
+      });
       if (archivo) await subirComprobanteRendicion(rendicion.id, archivo);
-      setMensaje("Le avisamos al administrador. Va a confirmar la recepción del pago.");
+      setMensaje("Le avisamos al administrador que pagaste por " + (metodo === "efectivo" ? "efectivo" : "transferencia") + ". Queda pendiente hasta que confirme la recepción.");
     } catch (err) {
       setError(err.message || "No se pudo avisar el pago.");
     } finally {
